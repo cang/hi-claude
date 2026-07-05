@@ -46,6 +46,8 @@ Dùng: `/fix-issue 123`. Biến `$ARGUMENTS` nhận toàn bộ phần sau lệnh
 
 Đây là cách rẻ nhất để "đóng gói quy trình": mọi việc bạn lặp lại quá 2 lần (review PR, viết changelog, tạo migration...) nên trở thành một command.
 
+> Lưu ý: kể từ khi Claude Code có tính năng **Skills**, `commands/` không còn là cách duy nhất — một skill (`.claude/skills/ten-skill/SKILL.md`) tạo ra cùng một slash command nhưng thêm được file phụ trợ và khả năng Claude tự gọi khi thấy phù hợp. `commands/` cũ vẫn chạy bình thường, không bắt buộc chuyển đổi. Xem chi tiết ở mục 11.2.1.
+
 ### 1.3 Hooks
 
 Hooks là script shell chạy **tự động và có tính quyết định** (deterministic) tại các sự kiện vòng đời — khác với việc "nhờ" Claude nhớ làm gì đó (nó có thể quên), hook luôn chạy. Cấu hình trong `.claude/settings.json` hoặc qua lệnh `/hooks`.
@@ -359,6 +361,76 @@ Nguyên tắc an toàn khi automation hóa: luôn giới hạn `--allowedTools`,
 
 ---
 
+## 11. Thư mục `.claude/` — nguồn gốc, cấu trúc và cách hoạt động
+
+### 11.1 Tự động hay tạo tay?
+
+Cả hai — và chúng tương đương nhau. Claude Code **tự tạo** thư mục và file khi một hành động cần đến nó: `/init` sinh CLAUDE.md, `/agents` ghi file vào `.claude/agents/`, `/hooks` và `/permissions` ghi vào `.claude/settings.json` (hoặc `settings.local.json`), việc bạn bấm "always allow" một tool cũng được lưu vào đây. Ngoài ra một số plugin/công cụ ngoài cũng ghi vào thư mục này.
+
+Nhưng bạn hoàn toàn có thể **tạo tay** — Claude Code không phân biệt file do nó sinh hay do bạn viết. Nó chỉ đơn giản quét các đường dẫn quy ước khi khởi động phiên: file nào đúng chỗ, đúng định dạng thì được nạp. Thực tế, dân dùng lâu năm chủ yếu viết tay (hoặc bảo chính Claude viết) vì kiểm soát nội dung tốt hơn.
+
+### 11.2 Cấu trúc quy ước
+
+```
+du-an/
+├── CLAUDE.md                    # bộ nhớ dự án — GỐC repo (hoặc đặt tại ./.claude/CLAUDE.md), commit vào Git
+├── CLAUDE.local.md              # cá nhân hoá riêng cho dự án này — GỐC repo, KHÔNG commit (tự thêm .gitignore)
+├── .mcp.json                    # MCP server dùng chung cho team — GỐC repo (KHÔNG nằm trong .claude/)
+│
+└── .claude/
+    ├── settings.json            # cấu hình CHUNG cho team → commit vào Git
+    ├── settings.local.json      # cấu hình CÁ NHÂN → tự động được gitignore
+    │
+    ├── rules/                   # quy tắc chia nhỏ theo chủ đề, nạp cùng CLAUDE.md
+    │   ├── code-style.md
+    │   ├── testing.md
+    │   └── api-design.md        #   thêm frontmatter `paths: ["src/api/**/*.ts"]` để chỉ nạp khi đụng file khớp
+    │
+    ├── skills/                  # cơ chế mới, đang thay thế dần commands/ (mỗi thư mục = 1 skill)
+    │   └── deploy/
+    │       ├── SKILL.md         #   bắt buộc: frontmatter description + nội dung hướng dẫn
+    │       └── scripts/         #   (tuỳ chọn) script/tài liệu phụ trợ đi kèm skill
+    │
+    ├── commands/                # cách cũ hơn — mỗi file .md phẳng = 1 slash command (vẫn chạy bình thường)
+    │   ├── review.md            #   → /review
+    │   └── frontend/
+    │       └── component.md     #   thư mục con = namespace → /frontend:component
+    │
+    ├── agents/                  # sub-agents (mỗi file .md = 1 agent)
+    │   └── code-reviewer.md
+    │
+    └── hooks/                   # (quy ước) script shell cho hooks — settings.json trỏ vào đây
+        └── format.sh
+```
+
+Song song đó là bản **toàn cục** `~/.claude/` trong thư mục home, cùng cấu trúc (`settings.json`, `rules/`, `skills/`, `commands/`, `agents/`, cộng thêm `CLAUDE.md` toàn cục) áp cho mọi dự án, và các thư mục nội bộ do Claude Code tự quản lý như `projects/` (lịch sử phiên chat để `--resume`, và từ bản hỗ trợ auto-memory là nơi lưu `memory/MEMORY.md` của từng dự án), `todos/`... — mấy thư mục nội bộ này bạn không cần và không nên sửa tay.
+
+### 11.2.1 Bốn bổ sung đáng chú ý (đã đối chiếu tài liệu chính thức)
+
+**`CLAUDE.local.md` — cá nhân hoá KHÔNG chia sẻ.** Đặt ở gốc repo (không phải trong `.claude/`), nạp cùng lúc và cùng cách với `CLAUDE.md` nhưng bạn tự thêm vào `.gitignore` (chạy `/init` và chọn mục cá nhân sẽ tự làm việc này). Hợp cho: URL sandbox riêng, dữ liệu test riêng. Hạn chế cần biết: nếu bạn làm việc qua nhiều **git worktree** của cùng repo (xem phần 3), file này chỉ tồn tại ở đúng worktree bạn tạo ra nó — muốn dùng chung giữa các worktree thì import từ home bằng `@~/.claude/ten-file.md` trong `CLAUDE.md` thay vì dựa vào `CLAUDE.local.md`.
+
+**`.claude/rules/` — CLAUDE.md chia nhỏ theo chủ đề, có thể tự động chỉ nạp khi cần.** Mỗi file là một chủ đề (`testing.md`, `security.md`...), quét đệ quy nên gộp được vào thư mục con (`rules/frontend/`, `rules/backend/`). Không có `paths` ở đầu file → nạp lúc khởi động, ngang hàng ưu tiên với `.claude/CLAUDE.md`. Có `paths` (glob, hỗ trợ brace `{ts,tsx}`) → chỉ nạp khi Claude đụng vào file khớp pattern đó, giúp tiết kiệm context so với nhét hết vào CLAUDE.md. Cũng hỗ trợ symlink để dùng chung rule giữa nhiều repo. Đây là câu trả lời chính thức cho việc "CLAUDE.md dự án quá dài" — tách phần chỉ liên quan tới một module ra `rules/`, còn CLAUDE.md giữ lại phần luôn cần.
+
+**`.claude/skills/` — kế thừa và mở rộng `commands/`.** Tài liệu chính thức nói thẳng: *"Custom commands have been merged into skills"* — file `.claude/commands/deploy.md` và skill `.claude/skills/deploy/SKILL.md` đều tạo ra lệnh `/deploy` giống hệt nhau, và `commands/` cũ **vẫn chạy bình thường**, không bị xoá hay ép chuyển đổi. Điểm skill có mà command không có: một thư mục riêng cho file phụ trợ (script, tài liệu tham khảo dài mà Claude chỉ đọc khi cần — "progressive disclosure"), frontmatter kiểm soát ai được gọi (bạn gõ `/ten-skill`, Claude tự gọi khi thấy phù hợp, hay cả hai), và khả năng chạy trong subagent riêng. Vậy quy tắc chọn: viết mới thì ưu tiên `skills/`; giữ nguyên `commands/` cũ nếu đang chạy tốt, không cần migrate gấp.
+
+**Sửa một điểm trong bảng tham khảo bạn gửi:** `.mcp.json` (scope `project`, chia sẻ qua Git) nằm ở **gốc repo**, không phải trong `.claude/` — điều này khớp với mục 8 ở trên của tài liệu này. Còn `plugins/` mà bạn thấy trong vài sơ đồ tham khảo **không phải** một thư mục `.claude/plugins/` để bạn tự chép plugin vào; plugin đã cài được Claude Code tự quản lý ở nơi khác (marketplace registry riêng), bạn thao tác qua lệnh `/plugin`, không sửa tay. Tương tự, không có bằng chứng chính thức cho một thư mục cố định `.claude/worktrees/` — cơ chế "auto-isolation" cho sub-agent (cờ `isolation: "worktree"` khi phái Agent) tự tạo và tự dọn worktree tạm ở nơi Claude Code quản lý, không phải một quy ước bạn cần thao tác trực tiếp trong `.claude/`.
+
+### 11.3 Nguyên tắc khi tạo tay
+
+Thứ nhất, **đúng tên, đúng chỗ**: tên file trong `commands/` chính là tên lệnh; agent phải có YAML frontmatter với `name` và `description`; settings phải là JSON hợp lệ (một dấu phẩy thừa là cả file bị bỏ qua).
+
+Thứ hai, **phân đúng tầng chung/riêng**: cái gì cả team cần (lệnh chuẩn, hook bắt buộc, permissions chung) → `settings.json` + commit; cái gì chỉ của bạn (API key path, sở thích cá nhân, thử nghiệm) → `settings.local.json`. Khi hai file cùng đặt một khóa, thứ tự ưu tiên là: cờ dòng lệnh > `settings.local.json` > `settings.json` của dự án > `~/.claude/settings.json` toàn cục (chính sách enterprise, nếu có, đứng trên tất cả).
+
+Thứ ba, **thay đổi có hiệu lực khi nào**: hầu hết được đọc lúc khởi động phiên, nên sau khi sửa tay `settings.json` hay thêm agent, cách chắc ăn là khởi động lại phiên (`claude` mới) hoặc ít nhất kiểm tra bằng `/agents`, `/hooks` xem đã nhận chưa. Command mới trong `commands/` thường được nhận ngay.
+
+### 11.4 Cách hoạt động khi phiên khởi động
+
+Trình tự nạp đại khái như sau: Claude Code hợp nhất settings theo thứ tự ưu tiên ở trên → nạp CLAUDE.md toàn cục rồi CLAUDE.md của repo (và CLAUDE.md thư mục con khi làm việc trong đó) → đăng ký slash commands từ `~/.claude/commands/` và `.claude/commands/` (trùng tên thì bản dự án hiển thị riêng với nhãn project) → đăng ký agents tương tự → gắn hooks vào các event → kết nối MCP servers theo cấu hình. Từ đó về sau, mọi thứ trong `.claude/` hành xử như "phần mở rộng" của Claude trong đúng dự án này.
+
+Hệ quả thực dụng: `.claude/` (trừ `settings.local.json`) chính là **hạ tầng dùng chung của team** — commit nó vào Git, và một thành viên mới clone repo về là lập tức có cùng bộ lệnh, cùng agents, cùng hooks với bạn, không cần cài cắm gì thêm.
+
+---
+
 ## Lộ trình gợi ý cho bạn
 
 Tuần 1: dùng thành thạo Plan mode, `/clear`, `/compact`, viết CLAUDE.md tốt. Tuần 2: tạo 3–5 slash commands cho quy trình của riêng bạn + hook auto-format. Tuần 3: tạo bộ sub-agents (explorer, reviewer, test-writer) và thử worktree với 2 instance. Tuần 4: cắm 1–2 MCP server thật sự cần, viết script headless đầu tiên, và thử claude-code-action trên một repo phụ.
@@ -366,5 +438,8 @@ Tuần 1: dùng thành thạo Plan mode, `/clear`, `/compact`, viết CLAUDE.md 
 Nguồn tham khảo chính thức:
 - Tổng quan: https://docs.claude.com/en/docs/claude-code/overview
 - Bản đồ tài liệu Claude Code: https://docs.anthropic.com/en/docs/claude-code/claude_code_docs_map.md
-- Modal: https://modal.com/docs
+- CLAUDE.md & auto memory (bao gồm `.claude/rules/`): https://code.claude.com/docs/en/memory
+- Skills (bao gồm quan hệ với commands/): https://code.claude.com/docs/en/skills
+- Plugins: https://code.claude.com/docs/en/plugins
 - MCP: https://modelcontextprotocol.io
+- Modal: https://modal.com/docs
