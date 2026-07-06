@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -c (New-Object Media.SoundPlayer 'C:\\Windows\\Media\\Alarm05.wav').PlaySync()"
+          }
+        ]
+      }
+    ]
+  }
+}
