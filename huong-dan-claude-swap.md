@@ -16,6 +16,10 @@ Mở PowerShell (chạy với quyền bình thường, không cần Admin) và c
 # Cài uv (tool quản lý Python rất nhanh)
 irm https://astral.sh/uv/install.ps1 | iex
 ```
+nếu bị thoát thì chạy
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
 
 Sau khi cài xong, đóng PowerShell và mở lại để PATH cập nhật.
 
